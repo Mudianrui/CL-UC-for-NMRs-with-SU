@@ -23,14 +23,6 @@ elseif n~=fix(n) || n<1
 end
 
 switch flag
-    case 0
-        p=ceil(n+1);
-        eta = (rho^2-z^2)/delta^2;
-        if z^2<=rho^2-delta^2
-            gamma = 1;
-        else
-            gamma = 1/(1-(eta-1)^p);
-        end
     case 4
         eta = ((z/rho)^2-delta^2)/(1-delta^2);
     otherwise
