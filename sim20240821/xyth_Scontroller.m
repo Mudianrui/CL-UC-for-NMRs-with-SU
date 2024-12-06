@@ -66,7 +66,7 @@ function sys=mdlDerivatives(~,sx,u)
 
 function sys=mdlOutputs(~,sx,u)
     t = u(1);
-    global controllerTypeK modelTypeAll
+    global controllerTypeK
     global lc T
     global alpha td Te cw
     global isReachTe1 isReachTe2 ThetaDeltasTe ThetaTe
@@ -84,9 +84,9 @@ function sys=mdlOutputs(~,sx,u)
     xs = u(7);
     ys = u(8);
     th = u(9);
-    v = u(10);
+%     v = u(10);
     w = u(11);
-    s = [v;w];
+%     s = [v;w];
     % intermediate variable
     Delta_s_hatx = u(12);
     Delta_s_haty = u(13);
@@ -156,6 +156,10 @@ function sys=mdlOutputs(~,sx,u)
 
     %% Calculate/estimate the coordinates and errors of control points
     switch controllerTypeK
+        case {52}
+            ep = ps-pr;
+            ex = ep(1);
+            ey = ep(2);
         case {56}
             trnsType = 0;
             trnst = trns(t,Te,T,trnsType);
@@ -164,37 +168,44 @@ function sys=mdlOutputs(~,sx,u)
             pe2 = ps-Psis*trueDelta+Delta_c-pr;
             pes = (1-trnst)*pe1+trnst*pe2;
             pehat = pes;
+            ex = pehat(1);
+            ey = pehat(2);
         otherwise
             pehat = ps-Psis*Delta_s_hat+Delta_c-pr;
+            ex = pehat(1);
+            ey = pehat(2);
     end
-    ex = pehat(1);
-    ey = pehat(2);
 
     %% Error transformation
+    if controllerTypeK==52
+        epsilon_ex = 0.2;
+        epsilon_ey = 0.2;
+    else
+        epsilon_ex = 0.01;
+        epsilon_ey = 0.01;
+    end
+    xi_ex_p = 1;
+    rou_ex = PPC_rho_inf(t,T,epsilon_ex,xi_ex_p,0);
+    drou_ex = PPC_rho_inf_derivative(t,T,epsilon_ex,xi_ex_p,0);
+    xi_ey_p = 1;
+    rou_ey = PPC_rho_inf(t,T,epsilon_ey,xi_ey_p,0);
+    drou_ey = PPC_rho_inf_derivative(t,T,epsilon_ey,xi_ey_p,0);
+    alphaR = 1;
+    amplifierType = 4;
+    delta_ex = 0.1;
+    delta_ey = 0.1;
     switch controllerTypeK
-        case {52,54}
-            epsilon_ex = 0.1;
-            epsilon_ey = 0.1;
-            xi_ex_p = 1;
-            rou_ex = PPC_rho_inf(t,T,epsilon_ex,xi_ex_p,0);
-            xi_ey_p = 1;
-            rou_ey = PPC_rho_inf(t,T,epsilon_ey,xi_ey_p,0);
-        case {56}
-            epsilon_ex = 0.2;
-            epsilon_ey = 0.2;
-            alphaR = 1;
-            amplifierType = 4;
-            xi_ex_p = 1;
-            delta_ex = 0.1;
-            rou_ex = PPC_rho_inf(t,T,epsilon_ex,xi_ex_p,0);
-            drou_ex = PPC_rho_inf_derivative(t,T,epsilon_ex,xi_ex_p,0);
+        case {52}
             alpha_ex = DirectPPC_amplifier(ex,rou_ex,delta_ex,alphaR,xi_ex_p,amplifierType);
             xi_ex = alpha_ex*ex;
             [mu_ex,upsilon_ex] = DirectPPC_amplifier_derivative(ex,rou_ex,drou_ex,delta_ex,alphaR,xi_ex_p,amplifierType);
-            xi_ey_p = 1;
-            delta_ey = 0.1;
-            rou_ey = PPC_rho_inf(t,T,epsilon_ey,xi_ey_p,0);
-            drou_ey = PPC_rho_inf_derivative(t,T,epsilon_ey,xi_ey_p,0);
+            alpha_ey = DirectPPC_amplifier(ey,rou_ey,delta_ey,alphaR,xi_ey_p,amplifierType);
+            xi_ey = alpha_ey*ey;
+            [mu_ey,upsilon_ey] = DirectPPC_amplifier_derivative(ey,rou_ey,drou_ey,delta_ey,alphaR,xi_ey_p,amplifierType);
+        case {56}
+            alpha_ex = DirectPPC_amplifier(ex,rou_ex,delta_ex,alphaR,xi_ex_p,amplifierType);
+            xi_ex = alpha_ex*ex;
+            [mu_ex,upsilon_ex] = DirectPPC_amplifier_derivative(ex,rou_ex,drou_ex,delta_ex,alphaR,xi_ex_p,amplifierType);
             alpha_ey = DirectPPC_amplifier(ey,rou_ey,delta_ey,alphaR,xi_ey_p,amplifierType);
             xi_ey = alpha_ey*ey;
             [mu_ey,upsilon_ey] = DirectPPC_amplifier_derivative(ey,rou_ey,drou_ey,delta_ey,alphaR,xi_ey_p,amplifierType);
@@ -204,17 +215,26 @@ function sys=mdlOutputs(~,sx,u)
     switch floor(controllerTypeK/10)
         case 5
             switch mod(controllerTypeK, 10)
-                case 2
+                case 0
                     kp = 10;
                     uvw = Psic\(dpr-kp*(ps-Psis*Delta_s_hat+Delta_c-pr));
                     uv = uvw(1);
                     uw = uvw(2);
                     kd = 100;
-                    if modelTypeAll==1
-                        dDelta_s_hat = -Psis'\(Psic*s-dpr)-kd*Delta_s_hat;
-                    else
-                        dDelta_s_hat = -Psis'\(Psic*uvw-dpr)-kd*Delta_s_hat;
-                    end
+                    dDelta_s_hat = -Psis'\(Psic*uvw-dpr)-kd*Delta_s_hat;
+                    dDelta_s_hatx = dDelta_s_hat(1);
+                    dDelta_s_haty = dDelta_s_hat(2);
+                case 2
+                    kp = 10;
+                    xi_p = [xi_ex;xi_ey];
+                    upsilon_p = [upsilon_ex;upsilon_ey];
+                    invmu_p = [1/mu_ex,0;0,1/mu_ey];
+                    mu_p = [mu_ex,0;0,mu_ey];
+                    uvw = Psic\(dpr-dPsis*Delta_s_hat-invmu_p*upsilon_p-kp*invmu_p*xi_p);
+                    uv = uvw(1);
+                    uw = uvw(2);
+                    kD = 100;
+                    dDelta_s_hat = dPsis'*mu_p'*xi_p-kD*Delta_s_hat;
                     dDelta_s_hatx = dDelta_s_hat(1);
                     dDelta_s_haty = dDelta_s_hat(2);
                 case 4
@@ -223,11 +243,7 @@ function sys=mdlOutputs(~,sx,u)
                     uv = uvw(1);
                     uw = uvw(2);
                     kD = 10;
-                    if modelTypeAll==1
-                        dot = -Psis'\(Psic*s-dpr)+kD*pinv(Theta)*epslion;
-                    else
-                        dot = -Psis'\(Psic*uvw-dpr)+kD*pinv(Theta)*epslion;
-                    end
+                    dot = -Psis'\(Psic*uvw-dpr)+kD*pinv(Theta)*epslion;
                     if norm(Delta_s_hat)<cw
                         Projection = dot;
                     else
@@ -274,7 +290,7 @@ function sys=mdlOutputs(~,sx,u)
     sys(8) = ey;
 
     switch controllerTypeK
-        case {52}
+        case {50,52}
             sys(9) = dDelta_s_hatx;
             sys(10) = dDelta_s_haty;
             sys(11) = 0;

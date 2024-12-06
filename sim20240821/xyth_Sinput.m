@@ -25,6 +25,7 @@ ts  = [];
 
 addpath(genpath('..\lib'))
 %controllerTypeK：  52：Traditional adaptive controller（Comparison）
+%                   52：Traditional prescribed performance controller（Comparison）
 %                   54：Unbiased Controller
 %                   56：Unbiased controller with prescribed performance
 global controllerTypeK
